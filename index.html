@@ -6588,6 +6588,22 @@ var $elm$html$Html$Attributes$href = function (url) {
 		'href',
 		_VirtualDom_noJavaScriptUri(url));
 };
+var $author$project$TopStories$htmlDecode = function (stringWithEscapedCharacters) {
+	var replace = F2(
+		function (_v0, src) {
+			var s1 = _v0.a;
+			var s2 = _v0.b;
+			return A2(
+				$elm$core$String$join,
+				s2,
+				A2($elm$core$String$split, s1, src));
+		});
+	var chrmap = _List_fromArray(
+		[
+			_Utils_Tuple2('&#x27;', '\'')
+		]);
+	return A3($elm$core$List$foldl, replace, stringWithEscapedCharacters, chrmap);
+};
 var $author$project$TopStories$viewTopStory = function (_v0) {
 	var topStoryIndex = _v0.a;
 	var topStoryWebData = _v0.b;
@@ -6609,7 +6625,8 @@ var $author$project$TopStories$viewTopStory = function (_v0) {
 						]),
 					_List_fromArray(
 						[
-							$elm$html$Html$text(topStory.title)
+							$elm$html$Html$text(
+							$author$project$TopStories$htmlDecode(topStory.title))
 						]))
 				]));
 	} else {

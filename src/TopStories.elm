@@ -239,11 +239,24 @@ viewTopStory ( topStoryIndex, topStoryWebData ) =
             in
             div []
                 [ text indexPrefix
-                , a [ href linkAddress ] [ text topStory.title ]
+                , a [ href linkAddress ] [ text <| htmlDecode topStory.title ]
                 ]
 
         _ ->
             text ""
+
+
+htmlDecode : String -> String
+htmlDecode stringWithEscapedCharacters =
+    let
+        replace ( s1, s2 ) src =
+            String.join s2 <| String.split s1 src
+
+        chrmap =
+            [ ( "&#x27;", "'" )
+            ]
+    in
+    List.foldl replace stringWithEscapedCharacters chrmap
 
 
 main : Program () Model Msg
