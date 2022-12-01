@@ -4,6 +4,7 @@ import Array
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (href)
+import Html.Events exposing (onClick)
 import Http
 import Json.Decode as Decode exposing (Decoder, int, list, nullable, string)
 import Json.Decode.Pipeline exposing (optional, required)
@@ -19,6 +20,7 @@ type alias TopStory =
 
 type alias Model =
     { topStoryIdsWebData : WebData (List Int)
+    , page : Int
     , storiesPerPage : Int
     , pagesTopStoriesWebData : List (WebData TopStory)
     }
@@ -27,12 +29,15 @@ type alias Model =
 type Msg
     = GotTopStoryIds (WebData (List Int))
     | GotTopStory (WebData TopStory)
+    | IncrementPage
+    | DecrementPage
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { topStoryIdsWebData = RemoteData.Loading
-      , storiesPerPage = 30
+      , page = 1
+      , storiesPerPage = 25
       , pagesTopStoriesWebData = []
       }
     , getTopStoryIds
@@ -76,8 +81,14 @@ update msg model =
                         updatedModel =
                             { model | topStoryIdsWebData = topStoryIdsWebData }
 
+                        firstStorysPositionInArray =
+                            (model.page - 1) * model.storiesPerPage
+
+                        lastStorysPositionInArray =
+                            firstStorysPositionInArray + model.storiesPerPage
+
                         pagesStoryIds =
-                            List.take model.storiesPerPage topStoryIds
+                            Array.toList (Array.slice firstStorysPositionInArray lastStorysPositionInArray (Array.fromList topStoryIds))
 
                         getTopStories =
                             Cmd.batch (List.map getTopStory pagesStoryIds)
@@ -102,6 +113,22 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        IncrementPage ->
+            ( { model
+                | page = min (model.page + 1) 20
+                , pagesTopStoriesWebData = []
+              }
+            , getTopStoryIds
+            )
+
+        DecrementPage ->
+            ( { model
+                | page = max (model.page - 1) 1
+                , pagesTopStoriesWebData = []
+              }
+            , getTopStoryIds
+            )
 
 
 type PageLoadState
@@ -179,7 +206,24 @@ view model =
             text "Loading..."
 
         Loaded ->
-            div [] (List.map viewTopStory sortedTopStoriesWithIndecies)
+            let
+                pageButtons =
+                    if model.page == 1 then
+                        [ button [ onClick IncrementPage ] [ text "Next Page" ] ]
+
+                    else if model.page == 20 then
+                        [ button [ onClick DecrementPage ] [ text "Previous Page" ] ]
+
+                    else
+                        [ button [ onClick DecrementPage ] [ text "Previous Page" ]
+                        , button [ onClick IncrementPage ] [ text "Next Page" ]
+                        ]
+            in
+            div []
+                (List.map (viewTopStory model.page model.storiesPerPage) sortedTopStoriesWithIndecies
+                    ++ [ div [] [ text ("Page " ++ String.fromInt model.page) ] ]
+                    ++ pageButtons
+                )
 
         Errored message ->
             text message
@@ -222,13 +266,13 @@ indexOf item listOfItems =
     indexOf2 listOfItems 0
 
 
-viewTopStory : ( Int, WebData TopStory ) -> Html Msg
-viewTopStory ( topStoryIndex, topStoryWebData ) =
+viewTopStory : Int -> Int -> ( Int, WebData TopStory ) -> Html Msg
+viewTopStory page perPage ( topStoryIndex, topStoryWebData ) =
     case topStoryWebData of
         RemoteData.Success topStory ->
             let
                 indexPrefix =
-                    String.fromInt (topStoryIndex + 1) ++ ". "
+                    String.fromInt (((page - 1) * perPage) + topStoryIndex + 1) ++ ". "
 
                 linkAddress =
                     if String.length topStory.url > 0 then
