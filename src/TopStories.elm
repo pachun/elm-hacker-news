@@ -1,14 +1,17 @@
 module TopStories exposing (main)
 
 import Array
-import Browser
+import Browser exposing (Document, UrlRequest)
+import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (href)
-import Html.Events exposing (onClick)
 import Http
 import Json.Decode as Decode exposing (Decoder, int, list, nullable, string)
 import Json.Decode.Pipeline exposing (optional, required)
 import RemoteData exposing (WebData)
+import Url exposing (Url)
+import Url.Parser
+import Url.Parser.Query
 
 
 type alias TopStory =
@@ -20,25 +23,47 @@ type alias TopStory =
 
 type alias Model =
     { topStoryIdsWebData : WebData (List Int)
-    , page : Int
+    , pageNumber : Int
     , storiesPerPage : Int
     , pagesTopStoriesWebData : List (WebData TopStory)
+    , navKey : Nav.Key
     }
 
 
 type Msg
     = GotTopStoryIds (WebData (List Int))
     | GotTopStory (WebData TopStory)
-    | IncrementPage
-    | DecrementPage
+    | LinkClicked UrlRequest
+    | UrlChanged Url
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
+storiesPerPage : Int
+storiesPerPage =
+    25
+
+
+numberOfTopStories : Int
+numberOfTopStories =
+    500
+
+
+firstPageNumber : Int
+firstPageNumber =
+    1
+
+
+lastPageNumber : Int
+lastPageNumber =
+    numberOfTopStories // storiesPerPage
+
+
+init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init _ url navKey =
     ( { topStoryIdsWebData = RemoteData.Loading
-      , page = 1
-      , storiesPerPage = 25
+      , pageNumber = pageNumberFromUrl url
+      , storiesPerPage = storiesPerPage
       , pagesTopStoriesWebData = []
+      , navKey = navKey
       }
     , getTopStoryIds
     )
@@ -75,60 +100,97 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotTopStoryIds topStoryIdsWebData ->
-            case topStoryIdsWebData of
-                RemoteData.Success topStoryIds ->
-                    let
-                        updatedModel =
-                            { model | topStoryIdsWebData = topStoryIdsWebData }
-
-                        firstStorysPositionInArray =
-                            (model.page - 1) * model.storiesPerPage
-
-                        lastStorysPositionInArray =
-                            firstStorysPositionInArray + model.storiesPerPage
-
-                        pagesStoryIds =
-                            Array.toList (Array.slice firstStorysPositionInArray lastStorysPositionInArray (Array.fromList topStoryIds))
-
-                        getTopStories =
-                            Cmd.batch (List.map getTopStory pagesStoryIds)
-                    in
-                    ( updatedModel
-                    , getTopStories
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
+            gotTopStoryIds model topStoryIdsWebData
 
         GotTopStory topStoryWebData ->
             case topStoryWebData of
                 RemoteData.Success _ ->
-                    let
-                        topStoriesWebData =
+                    ( { model
+                        | pagesTopStoriesWebData =
                             List.append model.pagesTopStoriesWebData [ topStoryWebData ]
-                    in
-                    ( { model | pagesTopStoriesWebData = topStoriesWebData }
+                      }
                     , Cmd.none
                     )
 
                 _ ->
                     ( model, Cmd.none )
 
-        IncrementPage ->
-            ( { model
-                | page = min (model.page + 1) 20
-                , pagesTopStoriesWebData = []
-              }
-            , getTopStoryIds
+        LinkClicked urlRequest ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( { model
+                        | pageNumber = pageNumberFromUrl url
+                        , pagesTopStoriesWebData = []
+                      }
+                    , Cmd.batch
+                        [ Nav.pushUrl model.navKey <| Url.toString url
+                        , getTopStoryIds
+                        ]
+                    )
+
+                Browser.External url ->
+                    ( model, Nav.load url )
+
+        UrlChanged url ->
+            ( model, Cmd.none )
+
+
+gotTopStoryIds : Model -> WebData (List Int) -> ( Model, Cmd Msg )
+gotTopStoryIds model topStoryIdsWebData =
+    case topStoryIdsWebData of
+        RemoteData.Success topStoryIds ->
+            let
+                currentPagesStoryIds =
+                    pagesStoryIds model.pageNumber model.storiesPerPage topStoryIds
+
+                getCurrentPageStories =
+                    Cmd.batch (List.map getTopStory currentPagesStoryIds)
+            in
+            ( { model | topStoryIdsWebData = topStoryIdsWebData }
+            , getCurrentPageStories
             )
 
-        DecrementPage ->
-            ( { model
-                | page = max (model.page - 1) 1
-                , pagesTopStoriesWebData = []
-              }
-            , getTopStoryIds
-            )
+        _ ->
+            ( model, Cmd.none )
+
+
+pagesStoryIds page perPage topStoryIds =
+    let
+        firstStorysPositionInArray =
+            (page - 1) * perPage
+
+        lastStorysPositionInArray =
+            firstStorysPositionInArray + perPage
+    in
+    Array.fromList topStoryIds
+        |> Array.slice firstStorysPositionInArray lastStorysPositionInArray
+        |> Array.toList
+
+
+pageNumberFromUrl : Url -> Int
+pageNumberFromUrl url =
+    let
+        maybeMaybePageNumber =
+            Url.Parser.parse (Url.Parser.query pageQueryParamParser) url
+    in
+    case maybeMaybePageNumber of
+        Just (Just pageNum) ->
+            if pageNum < firstPageNumber then
+                firstPageNumber
+
+            else if pageNum > lastPageNumber then
+                lastPageNumber
+
+            else
+                pageNum
+
+        _ ->
+            firstPageNumber
+
+
+pageQueryParamParser : Url.Parser.Query.Parser (Maybe Int)
+pageQueryParamParser =
+    Url.Parser.Query.int "p"
 
 
 type PageLoadState
@@ -190,8 +252,33 @@ modelToPageLoadState model =
                 Loading
 
 
-view : Model -> Html Msg
+view : Model -> Document Msg
 view model =
+    { title = "Hacker News"
+    , body = [ currentView model ]
+    }
+
+
+nextPageLinkLocation : Int -> String
+nextPageLinkLocation currentPageNumber =
+    let
+        nextPageNumber =
+            min (currentPageNumber + 1) lastPageNumber
+    in
+    "/?p=" ++ String.fromInt nextPageNumber
+
+
+previousPageLinkLocation : Int -> String
+previousPageLinkLocation currentPageNumber =
+    let
+        previousPageNumber =
+            max (currentPageNumber - 1) firstPageNumber
+    in
+    "/?p=" ++ String.fromInt previousPageNumber
+
+
+currentView : Model -> Html Msg
+currentView model =
     let
         sortedTopStories =
             List.sortWith
@@ -206,27 +293,32 @@ view model =
             text "Loading..."
 
         Loaded ->
-            let
-                pageButtons =
-                    if model.page == 1 then
-                        [ button [ onClick IncrementPage ] [ text "Next Page" ] ]
-
-                    else if model.page == 20 then
-                        [ button [ onClick DecrementPage ] [ text "Previous Page" ] ]
-
-                    else
-                        [ button [ onClick DecrementPage ] [ text "Previous Page" ]
-                        , button [ onClick IncrementPage ] [ text "Next Page" ]
-                        ]
-            in
             div []
-                (List.map (viewTopStory model.page model.storiesPerPage) sortedTopStoriesWithIndecies
-                    ++ [ div [] [ text ("Page " ++ String.fromInt model.page) ] ]
-                    ++ pageButtons
+                (List.map (viewTopStory model.pageNumber model.storiesPerPage) sortedTopStoriesWithIndecies
+                    ++ [ div [] [ text ("Page " ++ String.fromInt model.pageNumber) ] ]
+                    ++ pageNavigationLinks model.pageNumber
                 )
 
         Errored message ->
             text message
+
+
+pageNavigationLinks pageNumber =
+    let
+        nextPageLink =
+            [ a [ href (nextPageLinkLocation pageNumber) ] [ text "Next Page" ] ]
+
+        previousPageLink =
+            [ a [ href (previousPageLinkLocation pageNumber) ] [ text "Previous Page" ] ]
+    in
+    if pageNumber == firstPageNumber then
+        nextPageLink
+
+    else if pageNumber == lastPageNumber then
+        previousPageLink
+
+    else
+        previousPageLink ++ [ text " " ] ++ nextPageLink
 
 
 sortTopStories : WebData (List Int) -> WebData TopStory -> WebData TopStory -> Order
@@ -256,12 +348,12 @@ indexOf item listOfItems =
                 [] ->
                     Nothing
 
-                listHead :: listTail ->
-                    if listHead == item then
+                firstListItem :: remainingListItems ->
+                    if firstListItem == item then
                         Just index
 
                     else
-                        indexOf2 listTail (index + 1)
+                        indexOf2 remainingListItems (index + 1)
     in
     indexOf2 listOfItems 0
 
@@ -271,7 +363,7 @@ viewTopStory page perPage ( topStoryIndex, topStoryWebData ) =
     case topStoryWebData of
         RemoteData.Success topStory ->
             let
-                indexPrefix =
+                listPositionPrefix =
                     String.fromInt (((page - 1) * perPage) + topStoryIndex + 1) ++ ". "
 
                 linkAddress =
@@ -282,7 +374,7 @@ viewTopStory page perPage ( topStoryIndex, topStoryWebData ) =
                         "https://news.ycombinator.com/item?id=" ++ String.fromInt topStory.id
             in
             div []
-                [ text indexPrefix
+                [ text listPositionPrefix
                 , a [ href linkAddress ] [ text <| htmlDecode topStory.title ]
                 ]
 
@@ -305,8 +397,10 @@ htmlDecode stringWithEscapedCharacters =
 
 main : Program () Model Msg
 main =
-    Browser.element
+    Browser.application
         { init = init
+        , onUrlRequest = LinkClicked
+        , onUrlChange = UrlChanged
         , subscriptions = \_ -> Sub.none
         , update = update
         , view = view
