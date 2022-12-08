@@ -249,7 +249,7 @@ modelToPageLoadState model =
 
 view : Model -> Document Msg
 view model =
-    { title = "Hacker News"
+    { title = "Elm Hacker News"
     , body = [ currentView model ]
     }
 
