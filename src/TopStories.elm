@@ -171,7 +171,7 @@ pageNumberFromUrl : Url -> Int
 pageNumberFromUrl url =
     let
         maybeMaybePageNumber =
-            Url.Parser.parse (Url.Parser.query pageQueryParamParser) url
+            Url.Parser.parse (Url.Parser.query (Url.Parser.Query.int "p")) url
     in
     case maybeMaybePageNumber of
         Just (Just pageNum) ->
@@ -186,11 +186,6 @@ pageNumberFromUrl url =
 
         _ ->
             firstPageNumber
-
-
-pageQueryParamParser : Url.Parser.Query.Parser (Maybe Int)
-pageQueryParamParser =
-    Url.Parser.Query.int "p"
 
 
 type PageLoadState
