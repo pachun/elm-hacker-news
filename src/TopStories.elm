@@ -6,7 +6,7 @@ import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (href)
 import Http
-import Json.Decode as Decode exposing (Decoder, int, list, nullable, string)
+import Json.Decode as Decode exposing (int, list, string)
 import Json.Decode.Pipeline exposing (optional, required)
 import RemoteData exposing (WebData)
 import Url exposing (Url)
@@ -24,7 +24,6 @@ type alias TopStory =
 type alias Model =
     { topStoryIdsWebData : WebData (List Int)
     , pageNumber : Int
-    , storiesPerPage : Int
     , pagesTopStoriesWebData : List (WebData TopStory)
     , navKey : Nav.Key
     }
@@ -61,7 +60,6 @@ init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url navKey =
     ( { topStoryIdsWebData = RemoteData.Loading
       , pageNumber = pageNumberFromUrl url
-      , storiesPerPage = storiesPerPage
       , pagesTopStoriesWebData = []
       , navKey = navKey
       }
@@ -131,7 +129,7 @@ update msg model =
                 Browser.External url ->
                     ( model, Nav.load url )
 
-        UrlChanged url ->
+        UrlChanged _ ->
             ( model, Cmd.none )
 
 
@@ -141,7 +139,7 @@ gotTopStoryIds model topStoryIdsWebData =
         RemoteData.Success topStoryIds ->
             let
                 currentPagesStoryIds =
-                    pagesStoryIds model.pageNumber model.storiesPerPage topStoryIds
+                    pagesStoryIds model.pageNumber storiesPerPage topStoryIds
 
                 getCurrentPageStories =
                     Cmd.batch (List.map getTopStory currentPagesStoryIds)
@@ -154,6 +152,7 @@ gotTopStoryIds model topStoryIdsWebData =
             ( model, Cmd.none )
 
 
+pagesStoryIds : Int -> Int -> List Int -> List Int
 pagesStoryIds page perPage topStoryIds =
     let
         firstStorysPositionInArray =
@@ -238,7 +237,7 @@ modelToPageLoadState model =
         RemoteData.Success _ ->
             if
                 List.length model.pagesTopStoriesWebData
-                    == model.storiesPerPage
+                    == storiesPerPage
                     && List.all successfulHttpRequest model.pagesTopStoriesWebData
             then
                 Loaded
@@ -289,31 +288,32 @@ currentView model =
 
         Loaded ->
             div []
-                (List.map (viewTopStory model.pageNumber model.storiesPerPage) sortedTopStoriesWithIndecies
-                    ++ [ div [] [ text ("Page " ++ String.fromInt model.pageNumber) ] ]
-                    ++ pageNavigationLinks model.pageNumber
+                (List.map (viewTopStory model.pageNumber storiesPerPage) sortedTopStoriesWithIndecies
+                    ++ div [] [ text ("Page " ++ String.fromInt model.pageNumber) ]
+                    :: pageNavigationLinks model.pageNumber
                 )
 
         Errored message ->
             text message
 
 
+pageNavigationLinks : Int -> List (Html Msg)
 pageNavigationLinks pageNumber =
     let
         nextPageLink =
-            [ a [ href (nextPageLinkLocation pageNumber) ] [ text "Next Page" ] ]
+            a [ href (nextPageLinkLocation pageNumber) ] [ text "Next Page" ]
 
         previousPageLink =
-            [ a [ href (previousPageLinkLocation pageNumber) ] [ text "Previous Page" ] ]
+            a [ href (previousPageLinkLocation pageNumber) ] [ text "Previous Page" ]
     in
     if pageNumber == firstPageNumber then
-        nextPageLink
+        [ nextPageLink ]
 
     else if pageNumber == lastPageNumber then
-        previousPageLink
+        [ previousPageLink ]
 
     else
-        previousPageLink ++ [ text " " ] ++ nextPageLink
+        [ previousPageLink, text " ", nextPageLink ]
 
 
 sortTopStories : WebData (List Int) -> WebData TopStory -> WebData TopStory -> Order

@@ -6225,9 +6225,6 @@ var $author$project$TopStories$getTopStoryIds = $elm$http$Http$get(
 		url: 'https://hacker-news.firebaseio.com/v0/topstories.json'
 	});
 var $author$project$TopStories$firstPageNumber = 1;
-var $author$project$TopStories$numberOfTopStories = 500;
-var $author$project$TopStories$storiesPerPage = 25;
-var $author$project$TopStories$lastPageNumber = ($author$project$TopStories$numberOfTopStories / $author$project$TopStories$storiesPerPage) | 0;
 var $elm$url$Url$Parser$Internal$Parser = function (a) {
 	return {$: 'Parser', a: a};
 };
@@ -6264,7 +6261,9 @@ var $elm$url$Url$Parser$Query$int = function (key) {
 			}
 		});
 };
-var $author$project$TopStories$pageQueryParamParser = $elm$url$Url$Parser$Query$int('p');
+var $author$project$TopStories$numberOfTopStories = 500;
+var $author$project$TopStories$storiesPerPage = 25;
+var $author$project$TopStories$lastPageNumber = ($author$project$TopStories$numberOfTopStories / $author$project$TopStories$storiesPerPage) | 0;
 var $elm$url$Url$Parser$State = F5(
 	function (visited, unvisited, params, frag, value) {
 		return {frag: frag, params: params, unvisited: unvisited, value: value, visited: visited};
@@ -6412,7 +6411,8 @@ var $elm$url$Url$Parser$query = function (_v0) {
 var $author$project$TopStories$pageNumberFromUrl = function (url) {
 	var maybeMaybePageNumber = A2(
 		$elm$url$Url$Parser$parse,
-		$elm$url$Url$Parser$query($author$project$TopStories$pageQueryParamParser),
+		$elm$url$Url$Parser$query(
+			$elm$url$Url$Parser$Query$int('p')),
 		url);
 	if ((maybeMaybePageNumber.$ === 'Just') && (maybeMaybePageNumber.a.$ === 'Just')) {
 		var pageNum = maybeMaybePageNumber.a.a;
@@ -6428,7 +6428,6 @@ var $author$project$TopStories$init = F3(
 				navKey: navKey,
 				pageNumber: $author$project$TopStories$pageNumberFromUrl(url),
 				pagesTopStoriesWebData: _List_Nil,
-				storiesPerPage: $author$project$TopStories$storiesPerPage,
 				topStoryIdsWebData: $krisajenkins$remotedata$RemoteData$Loading
 			},
 			$author$project$TopStories$getTopStoryIds);
@@ -6826,7 +6825,7 @@ var $author$project$TopStories$gotTopStoryIds = F2(
 	function (model, topStoryIdsWebData) {
 		if (topStoryIdsWebData.$ === 'Success') {
 			var topStoryIds = topStoryIdsWebData.a;
-			var currentPagesStoryIds = A3($author$project$TopStories$pagesStoryIds, model.pageNumber, model.storiesPerPage, topStoryIds);
+			var currentPagesStoryIds = A3($author$project$TopStories$pagesStoryIds, model.pageNumber, $author$project$TopStories$storiesPerPage, topStoryIds);
 			var getCurrentPageStories = $elm$core$Platform$Cmd$batch(
 				A2($elm$core$List$map, $author$project$TopStories$getTopStory, currentPagesStoryIds));
 			return _Utils_Tuple2(
@@ -6934,7 +6933,6 @@ var $author$project$TopStories$update = F2(
 						$elm$browser$Browser$Navigation$load(url));
 				}
 			default:
-				var url = msg.a;
 				return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 		}
 	});
@@ -7016,7 +7014,7 @@ var $author$project$TopStories$modelToPageLoadState = function (model) {
 		default:
 			return (_Utils_eq(
 				$elm$core$List$length(model.pagesTopStoriesWebData),
-				model.storiesPerPage) && A2($elm$core$List$all, $author$project$TopStories$successfulHttpRequest, model.pagesTopStoriesWebData)) ? $author$project$TopStories$Loaded : $author$project$TopStories$Loading;
+				$author$project$TopStories$storiesPerPage) && A2($elm$core$List$all, $author$project$TopStories$successfulHttpRequest, model.pagesTopStoriesWebData)) ? $author$project$TopStories$Loaded : $author$project$TopStories$Loading;
 	}
 };
 var $elm$html$Html$a = _VirtualDom_node('a');
@@ -7049,42 +7047,36 @@ var $author$project$TopStories$previousPageLinkLocation = function (currentPageN
 var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
 var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
 var $author$project$TopStories$pageNavigationLinks = function (pageNumber) {
-	var previousPageLink = _List_fromArray(
+	var previousPageLink = A2(
+		$elm$html$Html$a,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$href(
+				$author$project$TopStories$previousPageLinkLocation(pageNumber))
+			]),
+		_List_fromArray(
+			[
+				$elm$html$Html$text('Previous Page')
+			]));
+	var nextPageLink = A2(
+		$elm$html$Html$a,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$href(
+				$author$project$TopStories$nextPageLinkLocation(pageNumber))
+			]),
+		_List_fromArray(
+			[
+				$elm$html$Html$text('Next Page')
+			]));
+	return _Utils_eq(pageNumber, $author$project$TopStories$firstPageNumber) ? _List_fromArray(
+		[nextPageLink]) : (_Utils_eq(pageNumber, $author$project$TopStories$lastPageNumber) ? _List_fromArray(
+		[previousPageLink]) : _List_fromArray(
 		[
-			A2(
-			$elm$html$Html$a,
-			_List_fromArray(
-				[
-					$elm$html$Html$Attributes$href(
-					$author$project$TopStories$previousPageLinkLocation(pageNumber))
-				]),
-			_List_fromArray(
-				[
-					$elm$html$Html$text('Previous Page')
-				]))
-		]);
-	var nextPageLink = _List_fromArray(
-		[
-			A2(
-			$elm$html$Html$a,
-			_List_fromArray(
-				[
-					$elm$html$Html$Attributes$href(
-					$author$project$TopStories$nextPageLinkLocation(pageNumber))
-				]),
-			_List_fromArray(
-				[
-					$elm$html$Html$text('Next Page')
-				]))
-		]);
-	return _Utils_eq(pageNumber, $author$project$TopStories$firstPageNumber) ? nextPageLink : (_Utils_eq(pageNumber, $author$project$TopStories$lastPageNumber) ? previousPageLink : _Utils_ap(
-		previousPageLink,
-		_Utils_ap(
-			_List_fromArray(
-				[
-					$elm$html$Html$text(' ')
-				]),
-			nextPageLink)));
+			previousPageLink,
+			$elm$html$Html$text(' '),
+			nextPageLink
+		]));
 };
 var $elm$core$Tuple$pair = F2(
 	function (a, b) {
@@ -7200,20 +7192,18 @@ var $author$project$TopStories$currentView = function (model) {
 				_Utils_ap(
 					A2(
 						$elm$core$List$map,
-						A2($author$project$TopStories$viewTopStory, model.pageNumber, model.storiesPerPage),
+						A2($author$project$TopStories$viewTopStory, model.pageNumber, $author$project$TopStories$storiesPerPage),
 						sortedTopStoriesWithIndecies),
-					_Utils_ap(
-						_List_fromArray(
-							[
-								A2(
-								$elm$html$Html$div,
-								_List_Nil,
-								_List_fromArray(
-									[
-										$elm$html$Html$text(
-										'Page ' + $elm$core$String$fromInt(model.pageNumber))
-									]))
-							]),
+					A2(
+						$elm$core$List$cons,
+						A2(
+							$elm$html$Html$div,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text(
+									'Page ' + $elm$core$String$fromInt(model.pageNumber))
+								])),
 						$author$project$TopStories$pageNavigationLinks(model.pageNumber))));
 		default:
 			var message = _v0.a;
@@ -7226,7 +7216,7 @@ var $author$project$TopStories$view = function (model) {
 			[
 				$author$project$TopStories$currentView(model)
 			]),
-		title: 'Hacker News'
+		title: 'Elm Hacker News'
 	};
 };
 var $author$project$TopStories$main = $elm$browser$Browser$application(
